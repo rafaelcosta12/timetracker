@@ -1,6 +1,8 @@
 from datetime import datetime
 import json
 import argparse
+import requests
+
 
 class TimeTracker:
     def __init__(self, filename='tracker.json'):
@@ -69,6 +71,45 @@ class TimeTracker:
         
         print(f"\nTotal de tarefas: {len(self.tracker_data)}")
 
+    def send_to_ollama(self, model_name):
+        url = "http://localhost:11434/api/generate"
+        headers = {"Content-Type": "application/json"}
+        data = {
+            "model": model_name,
+            "prompt": "Por favor, analise as seguintes tarefas registradas e me ajude a entender como posso melhorar minha produtividade:\n\n" + "\n".join([f"{task} em {datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')}" for task, timestamp in self.tracker_data]),
+            "stream": False,
+        }
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            print("Resposta do modelo:", response.json().get("response", "Nenhuma resposta recebida"))
+        else:
+            print("Erro ao enviar tarefa para o modelo:", response.status_code, response.text)
+
+    def send_to_deepseek(self, key=None):
+        if not key:
+            print("Chave de API DeepSeek não fornecida. Por favor, use o argumento -k ou --key para fornecer a chave.")
+            return
+        
+        url = "https://api.deepseek.com/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {key}"
+        }
+        data = {
+            "model": "deepseek-chat",
+            "stream": False,
+            "messages": [
+                {"role": "system", "content": "Você é um assistente de produtividade. Faça uma análise das tarefas registradas e uma lista com as pendências do dia."},
+                {"role": "user", "content": "Aqui estão as tarefas registradas:\n\n" + "\n".join([f"{task} em {datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')}" for task, timestamp in self.tracker_data])}
+            ]
+        }
+        response = requests.post(url, headers=headers, json=data)
+        if response.status_code == 200:
+            print("Resposta do modelo:", )
+            for chunk in response.json().get("choices", []):
+                print(chunk.get("message", {}).get("content", "Nenhuma resposta recebida"))
+        else:
+            print("Erro ao enviar tarefa para o modelo:", response.status_code, response.text)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -87,6 +128,24 @@ if __name__ == "__main__":
         action="store_true",
         help="Listar tarefas registradas"
     )
+
+    parser.add_argument(
+        "-s", "--send",
+        type=str,
+        help="Enviar tarefas para o modelo de IA (ollama)"
+    )
+
+    parser.add_argument(
+        "-d", "--deepseek",
+        action="store_true",
+        help="Enviar tarefas para o modelo DeepSeek via API"
+    )
+
+    parser.add_argument(
+        "-k", "--key",
+        type=str,
+        help="Chave de API para o modelo DeepSeek (se necessário)"
+    )
     
     args = parser.parse_args()
 
@@ -100,6 +159,16 @@ if __name__ == "__main__":
         
         if args.list:
             time_tracker.list_tasks()
+            exit(0)
+        
+        if args.send:
+            print(f"Enviando tarefas para o modelo {args.send} ...")
+            time_tracker.send_to_ollama(args.send)
+            exit(0)
+        
+        if args.deepseek:
+            print("Enviando tarefas para o modelo DeepSeek API ...")
+            time_tracker.send_to_deepseek(args.key)
             exit(0)
         
         time_tracker.start()
