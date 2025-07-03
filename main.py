@@ -1,70 +1,107 @@
 from datetime import datetime
 import json
+import argparse
 
-tracker_data = []
-
-def main():
-    print("== ⏰ Time Tracker ==")
+class TimeTracker:
+    def __init__(self, filename='tracker.json'):
+        self.filename = filename
+        self.tracker_data = []
+        self.load_tracker_data()
     
-    start = datetime.now()
-    tracker_data.append(("inicio", start))
-    print(f"# Inicio da contagem {start}")
-    
-    last = start
-    while True:
-        task = get_user_input()
-        print("\033[2A")
-        if not task: continue
-
-        now = datetime.now()
-        tracker_data.append((task, now))
-
-        diff = now - last
-        last = now
-        
-        prompt()
-        print(f"{task} em {diff.total_seconds()/60:0.1f} minutos", flush=True)
-
-def prompt():
-    print(">> ", flush=True, end="")
-
-def get_user_input():
-    try:
-        prompt()
-        task = input()
-    except KeyboardInterrupt:
-        print("\033[1A")
-        print("# se deseja sair, precione ctrl+c novamente")
+    def load_tracker_data(self):
         try:
-            prompt()
-            task = input()
-        except KeyboardInterrupt:
-            print("\033[1A")
-            print("# saindo ...")
-            raise
-    return task
+            with open(self.filename, 'r') as f:
+                self.tracker_data = json.load(f)
+        except FileNotFoundError:
+            self.tracker_data = []
 
-def get_date_format():
-    if tracker_data[0][1].day == tracker_data[-1][1].day:
-        return '%H:%M:%S'
-    else:
-        return '%d/%m %H:%M:%S'
+    def start(self):
+        self.start_time = datetime.now()
+        
+        if not self.tracker_data:
+            self.tracker_data.append(("inicio", self.start_time))
+        
+        print(f"# Inicio da contagem {self.start_time}")
+
+        last_task_time = self.start_time
+        while True:
+            current_task = self.prompt_for_task()
+            if not current_task: continue
+
+            timestamp_now = datetime.now()
+            self.tracker_data.append((current_task, timestamp_now))
+
+            elapsed_time = timestamp_now - last_task_time
+            last_task_time = timestamp_now
+            
+            print()
+            print(f"{current_task} em {elapsed_time.seconds/60:0.1f}min", flush=True)
+    
+    def prompt_for_task(self) -> str:
+        try:
+            task = input(">> ")
+        except KeyboardInterrupt:
+            print("# se deseja sair, precione ctrl+c novamente")
+            try:
+                task = input(">> ")
+            except KeyboardInterrupt as ex:
+                self.save_tracker_data()
+                raise ex
+        return task
+    
+    def save_tracker_data(self):
+        with open(self.filename, 'w') as f:
+            def custom_encoder(obj):
+                if isinstance(obj, datetime):
+                    return obj.isoformat()
+                return str(obj)
+            json.dump(self.tracker_data, f, default=custom_encoder, indent=2)
+        print(f"# Dados salvos em {self.filename}")
+    
+    def list_tasks(self):
+        if not self.tracker_data:
+            print("Nenhuma tarefa registrada.")
+            return
+        
+        print("Tarefas registradas:")
+        for task, timestamp in self.tracker_data:
+            print(f"{datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')}: {task}")
+        
+        print(f"\nTotal de tarefas: {len(self.tracker_data)}")
+
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(
+        description="Time Tracker CLI - registre e acompanhe suas tarefas e o tempo gasto nelas."
+    )
+    
+    parser.add_argument(
+        "-f", "--file", 
+        type=str, 
+        default="tracker.json", 
+        help="Arquivo de dados do tracker (padrão: tracker.json)"
+    )
+
+    parser.add_argument(
+        "-l", "--list", 
+        action="store_true",
+        help="Listar tarefas registradas"
+    )
+    
+    args = parser.parse_args()
+
     try:
-        main()
+        print("=" * 26, "⏰ Time Tracker", "=" * 26)
+        print("Bem-vindo! Pressione Ctrl+C duas vezes para sair e salvar os dados.")
+        print("Digite o nome da tarefa e pressione Enter para registrar.")
+        print("-" * 70)
+
+        time_tracker = TimeTracker(filename=args.file)
+        
+        if args.list:
+            time_tracker.list_tasks()
+            exit(0)
+        
+        time_tracker.start()
     except KeyboardInterrupt:
-        print("# tarefas executadas:")
-        date_format = get_date_format()
-        for i, item in enumerate(tracker_data):
-            name, date = item
-            
-            if i == 0:
-                print(f"{i + 1}: {name} {date}")
-                continue
-            
-            _, last_date = tracker_data[i - 1]
-            diff = date - last_date
-            print(f"{i + 1}: {name} {diff.total_seconds()/60:0.1f} segundos ({last_date.strftime(date_format)} até {date.strftime(date_format)})")
-        with open(tracker_data[0][1].strftime('tracker_%d_%m_%Y.json'), "w") as f:
-            f.write(json.dumps(tracker_data, default=str))
+        print("\n# Encerrando o Time Tracker")
