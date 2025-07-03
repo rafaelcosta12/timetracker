@@ -66,5 +66,5 @@ if __name__ == "__main__":
             _, last_date = tracker_data[i - 1]
             diff = date - last_date
             print(f"{i + 1}: {name} {diff.total_seconds()/60:0.1f} segundos ({last_date.strftime(date_format)} até {date.strftime(date_format)})")
-        with open(tracker_data[0][1].strftime('tracker_%d_%m_%Y.txt'), "w") as f:
+        with open(tracker_data[0][1].strftime('tracker_%d_%m_%Y.json'), "w") as f:
             f.write(json.dumps(tracker_data, default=str))
