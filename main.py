@@ -119,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "-f", "--file", 
         type=str, 
-        default="tracker.json", 
+        default=datetime.today().strftime('%Y-%m-%d') + ".json", 
         help="Arquivo de dados do tracker (padrão: tracker.json)"
     )
 
