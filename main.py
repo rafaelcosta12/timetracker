@@ -4,7 +4,7 @@ import json
 tracker_data = []
 
 def main():
-    print("==  ⏰ Time Tracker ==")
+    print("== ⏰ Time Tracker ==")
     
     start = datetime.now()
     tracker_data.append(("inicio", start))
