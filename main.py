@@ -2,18 +2,22 @@ from datetime import datetime
 import json
 import argparse
 import requests
+from rich.console import Console
+from rich.markdown import Markdown
 
 
 class TimeTracker:
-    def __init__(self, filename='tracker.json'):
+    def __init__(self, filename='tracker.json', deepseek_key=None):
         self.filename = filename
         self.tracker_data = []
         self.load_tracker_data()
+        self.deepseek_key = deepseek_key
     
     def load_tracker_data(self):
         try:
             with open(self.filename, 'r') as f:
-                self.tracker_data = json.load(f)
+                for l in json.load(f):
+                    self.tracker_data.append((l[0], datetime.fromisoformat(l[1])))
         except FileNotFoundError:
             self.tracker_data = []
 
@@ -28,6 +32,12 @@ class TimeTracker:
         last_task_time = self.start_time
         while True:
             current_task = self.prompt_for_task()
+
+            if current_task.startswith("/d"):
+                # envia mensagem personalizada para deepseek
+                self.send_to_deepseek(current_task[2:].strip())
+                continue
+
             if not current_task: continue
 
             timestamp_now = datetime.now()
@@ -37,18 +47,15 @@ class TimeTracker:
             last_task_time = timestamp_now
             
             print()
-            print(f"{current_task} em {elapsed_time.seconds/60:0.1f}min", flush=True)
-    
+            tempo_str = f"{elapsed_time.seconds // 3600:02}h {(elapsed_time.seconds // 60) % 60:02}m {elapsed_time.seconds % 60:02}s"
+            print(f"# {tempo_str}", flush=True)
+
     def prompt_for_task(self) -> str:
         try:
             task = input(">> ")
-        except KeyboardInterrupt:
-            print("# se deseja sair, precione ctrl+c novamente")
-            try:
-                task = input(">> ")
-            except KeyboardInterrupt as ex:
-                self.save_tracker_data()
-                raise ex
+        except KeyboardInterrupt as ex:
+            self.save_tracker_data()
+            raise ex
         return task
     
     def save_tracker_data(self):
@@ -67,7 +74,7 @@ class TimeTracker:
         
         print("Tarefas registradas:")
         for task, timestamp in self.tracker_data:
-            print(f"{datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')}: {task}")
+            print(f"{timestamp.strftime('%Y-%m-%d %H:%M:%S')}: {task}")
         
         print(f"\nTotal de tarefas: {len(self.tracker_data)}")
 
@@ -85,29 +92,36 @@ class TimeTracker:
         else:
             print("Erro ao enviar tarefa para o modelo:", response.status_code, response.text)
 
-    def send_to_deepseek(self, key=None):
-        if not key:
+    def send_to_deepseek(self, custom_message=None):
+        if not self.deepseek_key:
             print("Chave de API DeepSeek não fornecida. Por favor, use o argumento -k ou --key para fornecer a chave.")
             return
         
         url = "https://api.deepseek.com/chat/completions"
         headers = {
             "Content-Type": "application/json",
-            "Authorization": f"Bearer {key}"
+            "Authorization": f"Bearer {self.deepseek_key}"
         }
+
+        message = custom_message or f"Com base nas tarefas, faça um resumo do que fiz hoje ({datetime.today().date()}) e quais são as minhas póximas prioridades."
+
         data = {
             "model": "deepseek-chat",
             "stream": False,
             "messages": [
-                {"role": "system", "content": "Você é um assistente de produtividade. Faça uma análise das tarefas registradas e uma lista com as pendências do dia."},
-                {"role": "user", "content": "Aqui estão as tarefas registradas:\n\n" + "\n".join([f"{task} em {datetime.fromisoformat(timestamp).strftime('%Y-%m-%d %H:%M:%S')}" for task, timestamp in self.tracker_data])}
+                {"role": "system", "content": "Você é um assistente de produtividade. Sempre responda de forma clara e objetiva. Pode categorizar tarefas e incluir dados de tempo e sugestões de melhoria."},
+                {"role": "user", "content": "Tarefas registradas:\n\n" + "\n".join([f"{task} em {timestamp.strftime('%Y-%m-%d %H:%M:%S')}" for task, timestamp in self.tracker_data])},
+                {"role": "user", "content": message}
             ]
         }
         response = requests.post(url, headers=headers, json=data)
         if response.status_code == 200:
             print("Resposta do modelo:", )
+            print()
+            console = Console()
             for chunk in response.json().get("choices", []):
-                print(chunk.get("message", {}).get("content", "Nenhuma resposta recebida"))
+                content = chunk.get("message", {}).get("content", "")
+                console.print(Markdown(content))
         else:
             print("Erro ao enviar tarefa para o modelo:", response.status_code, response.text)
 
@@ -142,7 +156,7 @@ if __name__ == "__main__":
     )
 
     parser.add_argument(
-        "-k", "--key",
+        "-k", "--deepseek_key",
         type=str,
         help="Chave de API para o modelo DeepSeek (se necessário)"
     )
@@ -155,7 +169,7 @@ if __name__ == "__main__":
         print("Digite o nome da tarefa e pressione Enter para registrar.")
         print("-" * 70)
 
-        time_tracker = TimeTracker(filename=args.file)
+        time_tracker = TimeTracker(filename=args.file, deepseek_key=args.deepseek_key)
         
         if args.list:
             time_tracker.list_tasks()
@@ -168,7 +182,7 @@ if __name__ == "__main__":
         
         if args.deepseek:
             print("Enviando tarefas para o modelo DeepSeek API ...")
-            time_tracker.send_to_deepseek(args.key)
+            time_tracker.send_to_deepseek()
             exit(0)
         
         time_tracker.start()
