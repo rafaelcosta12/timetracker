@@ -202,7 +202,7 @@ class TimeTracker:
             return
 
         print("Tarefas registradas (total: {}, contexto: {}):".format(len(self.tracker_data), self.context_size))
-        for task, timestamp in self.tracker_data[:self.context_size]:
+        for task, timestamp in self.tracker_data[-self.context_size:]:
             print(f"{timestamp.strftime('%d/%m %H:%M:%S')}: {task.capitalize()}")
 
     def _send_to_deepseek(self, assistent: AssistentDefinition, message=None):
