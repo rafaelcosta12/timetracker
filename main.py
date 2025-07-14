@@ -108,6 +108,7 @@ class TimeTracker:
             try:
                 task_time = datetime.strptime(params.strip(), '%Y-%m-%d %H:%M:%S')
                 self.tracker_data.append((self._prompt_for_task(), task_time))
+                self.tracker_data.sort(key=lambda x: x[1])  # ordena por data
                 print(f"Tarefa registrada para {task_time.strftime('%Y-%m-%d %H:%M:%S')}")
             except ValueError:
                 print("Formato de data inválido. Use 'YYYY-MM-DD HH:MM:SS'.")
@@ -180,8 +181,7 @@ class TimeTracker:
         try:
             task = prompt('>> ',
              history=FileHistory('.history.txt'),
-             auto_suggest=AutoSuggestFromHistory(),
-             mouse_support=True)
+             auto_suggest=AutoSuggestFromHistory())
         except KeyboardInterrupt as ex:
             self._save_tracker_data()
             raise ex
@@ -202,8 +202,9 @@ class TimeTracker:
             return
 
         print("Tarefas registradas (total: {}, contexto: {}):".format(len(self.tracker_data), self.context_size))
-        for task, timestamp in self.tracker_data[-self.context_size:]:
-            print(f"{timestamp.strftime('%d/%m %H:%M:%S')}: {task.capitalize()}")
+        for i, line in enumerate(self.tracker_data[-self.context_size:]):
+            task, timestamp = line
+            print(f"{i}) {timestamp.strftime('%d/%m %H:%M:%S')}: {task.capitalize()}")
 
     def _send_to_deepseek(self, assistent: AssistentDefinition, message=None):
         if not self.deepseek_key:
@@ -237,6 +238,7 @@ class TimeTracker:
                 console.print(Markdown(content))
         else:
             print("Erro ao enviar tarefa para o modelo:", response.status_code, response.text)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
